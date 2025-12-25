@@ -1,0 +1,65 @@
+Applying Routing Constraints...
+Applying Time Constraints...
+Applying Capacity Constraints...
+Applying Flow Constraints...
+Applying LIFO Constraints...
+Applying Objective Constraints...
+Solving...
+============================================================
+🚚 VRP FINAL SIMULATION REPORT (Modular Ontology)
+============================================================
+💰 Total Cost breakdown:
+   Total Objective : 132075
+   ----------------------------------------
+   1. Fixed Cost   : 11000
+   2. Dist Cost    : 8150
+   3. Labor Cost   : 8450
+   4. Zone Penalty : 4000
+   5. Re-handling  : 0
+   6. Waiting Cost : 475
+   7. Miss Penalty : 0
+   8. Late Penalty : 100000
+============================================================
+
+============================================================
+🔎 LIFO INTERFERENCE DEBUG
+============================================================
+============================================================
+
+🚛 Vehicle 1
+   Step 00 | Loc_0 | Time: 0000 | Load 0
+   Step 01 | Loc_5 | Time: 0045 | Load 15
+   Step 02 | Loc_15 | Time: 0115 | Load 35
+   Step 03 | Loc_11 | Time: 0140 | Load 15
+   Step 04 | Loc_9 | Time: 0180 / Due 720 [LATE] | Load 0
+   Step 05 | Loc_0 | Time: 0200 | Load 0
+   Step 06 | Loc_0 | Time: 0200 | Load 0
+
+🚛 Vehicle 2
+   Step 00 | Loc_0 | Time: 0000 | Load 0
+   Step 01 | Loc_7 | Time: 0040 | Load 10
+   Step 02 | Loc_8 | Time: 0070 | Load 0
+   Step 03 | Loc_4 | Time: 0120 | Load 5
+   Step 04 | Loc_3 | Time: 0160 | Load 0
+   Step 05 | Loc_0 | Time: 0210 | Load 0
+   Step 06 | Loc_0 | Time: 0210 | Load 0
+
+🚛 Vehicle 3
+   Step 00 | Loc_0 | Time: 0000 | Load 0
+   Step 01 | Loc_13 | Time: 0050 | Load 10
+   Step 02 | Loc_12 | Time: 0070 | Load 0
+   Step 03 | Loc_0 | Time: 0100 | Load 0
+   Step 04 | Loc_16 | Time: 0165 | Load 15
+   Step 05 | Loc_14 | Time: 0185 / Due 720 [LATE] | Load 0
+   Step 06 | Loc_0 | Time: 0220 | Load 0
+   Step 07 | Loc_0 | Time: 0220 | Load 0
+
+🚛 Vehicle 4
+   Step 00 | Loc_0 | Time: 0000 | Load 0
+   Step 01 | Loc_1 | Time: 0070 | Load 10
+   Step 02 | Loc_6 | Time: 0120 | Load 0
+   Step 03 | Loc_2 | Time: 0145 | Load 20
+   Step 04 | Loc_10 | Time: 0175 | Load 0
+   Step 05 | Loc_0 | Time: 0215 | Load 0
+   Step 06 | Loc_0 | Time: 0215 | Load 0
+
