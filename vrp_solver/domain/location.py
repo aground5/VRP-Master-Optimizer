@@ -18,10 +18,6 @@ class Location:
     id: int
     name: str = ""
     
-    # Time Window
-    start_window: int = 0        # Ready time (earliest arrival)
-    end_window: int = 10000      # Due time (latest arrival)
-    
     # Service
     service_duration: int = 0    # Default service time at this location
     
@@ -34,3 +30,4 @@ class Location:
     # Optional Coordinates (for visualization/distance calc if not matrix-based)
     x: float = 0.0
     y: float = 0.0
+
