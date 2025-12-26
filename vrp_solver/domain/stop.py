@@ -1,48 +1,43 @@
-"""
-Stop Domain Model.
-
-A Stop is a logical node in the routing graph.
-It represents a visitable point (pickup, delivery, or depot) separate from the physical Location.
-This allows multiple visits to the same physical location for different shipments.
-"""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 from enum import Enum
 
-
 class StopType(Enum):
-    """Type of stop in the route."""
-    DEPOT_START = "depot_start"  # Vehicle departure point
-    DEPOT_END = "depot_end"      # Vehicle return point
-    PICKUP = "pickup"            # Pickup for a shipment
-    DELIVERY = "delivery"        # Delivery for a shipment
-
+    DEPOT_START = "depot_start"
+    DEPOT_END = "depot_end"
+    PICKUP = "pickup"
+    DELIVERY = "delivery"
 
 @dataclass
 class Stop:
     """
-    A logical stop/node in the VRP graph.
-    
-    Note: TimeWindow is NOT stored here!
-    - For PICKUP/DELIVERY: Use Shipment.pickup_window/delivery_window
-    - For DEPOT: Use Location.start_window/end_window
-    
-    This design avoids data duplication and keeps Shipment as the source of truth.
+    Resolved Node in a Route.
+    Contains optimization RESULTS (Timestamps, Metrics).
     """
-    id: int                     # Unique stop index (0, 1, 2, ...)
-    stop_type: StopType         # What kind of stop
-    location_idx: int           # Physical location index
-    
-    # For PICKUP/DELIVERY only (-1 for depots)
+    id: int
+    stop_type: StopType
+    location_idx: int
     shipment_idx: int = -1
-    
-    # For DEPOT only (-1 for shipment stops)
     vehicle_idx: int = -1
+
+    # --- Results (Planned) ---
+    arrival_time: int = 0        # ToA (Time of Arrival)
+    departure_time: int = 0      # ToD (Time of Departure)
+    service_time: int = 0        # Duration of service at this stop
+    waiting_time: int = 0        # Wait time if arrived early
     
-    # Pre-computed load deltas (for capacity constraints)
-    # PICKUP: +weight/+volume, DELIVERY: -weight/-volume, DEPOT: 0
-    weight_delta: int = 0
-    volume_delta: int = 0
+    # --- Cumulative Metrics (Validation) ---
+    cum_dist: float = 0.0        # Cumulative distance from start
+    cum_weight: float = 0.0      # Current load (weight) after this stop
+    cum_volume: float = 0.0      # Current load (volume) after this stop
     
+    # --- Violations (Soft Constraints) ---
+    late_arrival_min: int = 0    # Minutes late beyond time window
+
+    @property
+    def total_duration(self) -> int:
+        return self.departure_time - self.arrival_time
+
     @property
     def is_depot(self) -> bool:
         return self.stop_type in (StopType.DEPOT_START, StopType.DEPOT_END)

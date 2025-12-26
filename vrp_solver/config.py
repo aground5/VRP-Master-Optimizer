@@ -6,6 +6,7 @@ class VRPConfig:
     
     # Scale
     scale_factor: int = 10
+    capacity_scale_factor: int = 100  # For handling float weights/volumes (e.g. 0.01 precision)
     
     # Labor/Operations
     standard_work_time: int = 480    # 8 hours

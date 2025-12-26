@@ -37,8 +37,8 @@ class Site(BaseModel):
 # ============================================================
 
 class VehicleCapacity(BaseModel):
-    weight: int = 50
-    volume: int = 50
+    weight: float = 50.0
+    volume: float = 50.0
 
 class VehicleCost(BaseModel):
     fixed: int = 0
@@ -70,8 +70,8 @@ class Vehicle(BaseModel):
 # ============================================================
 
 class Cargo(BaseModel):
-    weight: int = 0
-    volume: int = 0
+    weight: float = 0.0
+    volume: float = 0.0
 
 class Shipment(BaseModel):
     id: str
@@ -99,10 +99,34 @@ class MatrixResponse(BaseModel):
 # Optimize Request/Response
 # ============================================================
 
-class PenaltyConfig(BaseModel):
-    unserved: int = 500000
-    late_delivery: int = 50000
-    zone_crossing: int = 2000
+
+class SolverConfig(BaseModel):
+    # Scale
+    capacity_scale_factor: int = 100
+    
+    # Labor
+    standard_work_time: int = 480
+    max_work_time: int = 720
+    overtime_multiplier: float = 1.5
+    break_interval: int = 240
+    break_duration: int = 30
+    
+    # Operations
+    depot_min_service_time: int = 30
+    min_intra_transit: int = 5
+    
+    # Costs
+    cost_per_kg_km: int = 1
+    cost_per_wait_min: int = 5
+    
+    # Penalties
+    unserved_penalty: int = 500000
+    late_penalty: int = 50000
+    zone_penalty: int = 2000
+    
+    # Solver
+    max_solver_time: float = 30.0
+    num_solver_workers: int = 8
 
 class OptimizeRequest(BaseModel):
     sites: List[Site]
@@ -110,14 +134,16 @@ class OptimizeRequest(BaseModel):
     shipments: List[Shipment]
     durations: List[List[int]]
     distances: List[List[int]]
-    penalties: PenaltyConfig = Field(default_factory=PenaltyConfig)
-    max_solver_time: float = 30.0
+    penalties: PenaltyConfig = Field(default_factory=PenaltyConfig) # Keep for backward compat, but prefer config
+    config: SolverConfig = Field(default_factory=SolverConfig)
+    max_solver_time: float = 30.0 # Deprecated, use config.max_solver_time
+
 
 class RouteStop(BaseModel):
     site_id: str
     arrival_time: int
-    load_weight: int
-    load_volume: int
+    load_weight: float
+    load_volume: float
     is_late: bool = False
 
 class VehicleRoute(BaseModel):

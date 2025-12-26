@@ -3,7 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VRPMap } from '@/components/map/VRPMap';
 import { OntologyFlow } from '@/components/flow/OntologyFlow';
-import { ScheduleGantt } from '@/components/gantt/ScheduleGantt';
+import { ScheduleGantt, OrderGantt, DeliveryGantt } from '@/components/gantt/ScheduleGantt';
 import { PropertyPanel } from '@/components/panel/PropertyPanel';
 import { DetailPanel } from '@/components/panel/DetailPanel';
 import { ControlBar } from '@/components/panel/ControlBar';
@@ -38,7 +38,8 @@ export default function Home() {
             <TabsList className="mx-2 mt-2 w-fit">
               <TabsTrigger value="map">🗺️ Map</TabsTrigger>
               <TabsTrigger value="flow">🔗 Ontology</TabsTrigger>
-              <TabsTrigger value="gantt">📊 Gantt</TabsTrigger>
+              <TabsTrigger value="order-gantt">📦 Order Gantt</TabsTrigger>
+              <TabsTrigger value="delivery-gantt">🚛 Delivery Gantt</TabsTrigger>
             </TabsList>
 
             <TabsContent value="map" className="flex-1 m-0 relative">
@@ -49,8 +50,12 @@ export default function Home() {
               <OntologyFlow />
             </TabsContent>
 
-            <TabsContent value="gantt" className="flex-1 m-0 p-2">
-              <ScheduleGantt />
+            <TabsContent value="order-gantt" className="flex-1 m-0 p-2">
+              <OrderGantt />
+            </TabsContent>
+
+            <TabsContent value="delivery-gantt" className="flex-1 m-0 p-2">
+              <DeliveryGantt />
             </TabsContent>
           </Tabs>
         </main>

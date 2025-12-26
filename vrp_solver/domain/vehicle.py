@@ -11,9 +11,12 @@ from .labor import LaborPolicy
 @dataclass
 class VehicleCapacity:
     """Physical capacity limits of a vehicle."""
-    weight: int = 50             # Max weight (kg)
-    volume: int = 50             # Max volume (m³ or units)
-    # Could add: pallets, linear_meters, etc.
+    weight: float = 50.0             # Max weight (kg)
+    volume: float = 50.0             # Max volume (m³ or units)
+    
+    # Operational Limits
+    max_stops: int = 100             # Max stops per route
+    max_distance_km: float = 500.0   # Max distance per route
 
 @dataclass
 class VehicleProfile:
@@ -30,6 +33,11 @@ class Vehicle:
     name: str = ""
     start_loc: int = 0           # Starting depot/location
     end_loc: int = 0             # Ending depot/location
+    
+    # Current State (digital twin / simulation)
+    current_lat: float = 0.0
+    current_lon: float = 0.0
+    current_fuel_level: float = 100.0
     profile: VehicleProfile = field(default_factory=VehicleProfile)
     cost: VehicleCostProfile = field(default_factory=VehicleCostProfile)
     labor: LaborPolicy = field(default_factory=LaborPolicy)

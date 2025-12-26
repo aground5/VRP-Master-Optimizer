@@ -3,14 +3,78 @@ Data Loader.
 
 Converts raw input data into Domain Ontology objects.
 """
+from typing import List
 from vrp_solver.domain import (
     VRPData, Location, SiteProfile,
     Vehicle, VehicleProfile, VehicleCapacity, VehicleCostProfile,
     Shipment, Cargo, TimeWindow,
     LaborPolicy, WorkShift, BreakRule, LaborCost,
-    PenaltyConfig, OperationalCost
+    PenaltyConfig, OperationalCost,
+    Stop, StopType
 )
 from vrp_solver.config import VRPConfig
+
+
+def build_stops(vehicles: List[Vehicle], shipments: List[Shipment]) -> List[Stop]:
+    """
+    Build the Stop list from vehicles and shipments.
+    
+    Stop structure:
+      - First: Start depot for each vehicle
+      - Middle: Pickup & Delivery stops for each shipment
+      - Last: End depot for each vehicle
+    
+    This allows multiple stops to reference the same physical location.
+    """
+    stops = []
+    stop_id = 0
+    
+    # --- 1. Start Depots (one per vehicle) ---
+    for v_idx, veh in enumerate(vehicles):
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.DEPOT_START,
+            location_idx=veh.start_loc,
+            vehicle_idx=v_idx,
+            shipment_idx=-1
+        ))
+        stop_id += 1
+    
+    # --- 2. Shipment Stops (pickup + delivery for each) ---
+    for s_idx, ship in enumerate(shipments):
+        # Pickup stop
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.PICKUP,
+            location_idx=ship.pickup_id,
+            shipment_idx=s_idx,
+            vehicle_idx=-1
+        ))
+        stop_id += 1
+        
+        # Delivery stop
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.DELIVERY,
+            location_idx=ship.delivery_id,
+            shipment_idx=s_idx,
+            vehicle_idx=-1
+        ))
+        stop_id += 1
+    
+    # --- 3. End Depots (one per vehicle) ---
+    for v_idx, veh in enumerate(vehicles):
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.DEPOT_END,
+            location_idx=veh.end_loc,
+            vehicle_idx=v_idx,
+            shipment_idx=-1
+        ))
+        stop_id += 1
+    
+    return stops
+
 
 def load_dummy_data(config: VRPConfig) -> VRPData:
     """
@@ -68,8 +132,6 @@ def load_dummy_data(config: VRPConfig) -> VRPData:
         loc = Location(
             id=i,
             name=f"Loc_{i}",
-            start_window=ready_time[i],
-            end_window=due_time[i],
             service_duration=service_duration[i],
             zone_id=zones[i],
             profile=SiteProfile()
@@ -127,25 +189,46 @@ def load_dummy_data(config: VRPConfig) -> VRPData:
     shipments = []
     pid_counter = 0
     for p, (d, w) in pair_defs.items():
+        # Get time windows from raw data
+        p_start = ready_time[p]
+        p_end = due_time[p]
+        d_start = ready_time[d]
+        d_end = due_time[d]
+        
+        # [Safety Logic] Fix Time Paradox: Delivery must be reachable after Pickup
+        # Min required: pickup_start + service(10) + travel_time
+        min_travel = raw_time_matrix[p][d] * 5  # raw * 5 = actual travel time
+        min_delivery_start = p_start + 10 + min_travel
+        
+        if d_end < min_delivery_start:
+            # Delivery window ends before we can possibly arrive - fix it
+            d_start = max(d_start, min_delivery_start)
+            d_end = d_start + 100  # Give a wide window
+        
         shipment = Shipment(
             id=pid_counter,
             name=f"Ship_{pid_counter}",
             pickup_id=p,
             delivery_id=d,
-            cargo=Cargo(weight=w, volume=w),  # 1:1 weight/volume
-            required_tags=[],  # No special requirements
+            cargo=Cargo(weight=w, volume=w),
+            pickup_window=TimeWindow(start=p_start, end=p_end),
+            delivery_window=TimeWindow(start=d_start, end=d_end),
+            required_tags=[],
             priority=1,
             unserved_penalty=config.unserved_penalty
         )
         shipments.append(shipment)
         pid_counter += 1
+    
+    # --- 5. Build Stops ---
+    stops = build_stops(vehicles, shipments)
         
-    # --- 5. Matrices ---
+    # --- 6. Matrices ---
     calc_travel_time = [[t * 5 for t in row] for row in raw_time_matrix]
     calc_travel_dist = [[t * 5 for t in row] for row in raw_time_matrix]
     setup_time = [[0] * num_locations for _ in range(num_locations)]
     
-    # --- 6. Global Policies ---
+    # --- 7. Global Policies ---
     penalties = PenaltyConfig(
         unserved=config.unserved_penalty,
         late_delivery=config.late_penalty,
@@ -161,6 +244,7 @@ def load_dummy_data(config: VRPConfig) -> VRPData:
         locations=locations,
         vehicles=vehicles,
         shipments=shipments,
+        stops=stops,
         travel_time_matrix=calc_travel_time,
         travel_dist_matrix=calc_travel_dist,
         setup_time_matrix=setup_time,

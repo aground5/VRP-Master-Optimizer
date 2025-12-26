@@ -25,8 +25,10 @@ def convert_request_to_vrp_data(request: OptimizeRequest):
         Vehicle as DomainVehicle, VehicleProfile, VehicleCapacity, VehicleCostProfile,
         Shipment as DomainShipment, Cargo as DomainCargo,
         LaborPolicy, WorkShift, BreakRule, LaborCost,
-        PenaltyConfig as DomainPenaltyConfig, OperationalCost
+        PenaltyConfig as DomainPenaltyConfig, OperationalCost,
+        Stop, StopType
     )
+    from vrp_solver.domain.shipment import TimeWindow as DomainTimeWindow
     
     # Build site_id -> index mapping
     site_id_to_idx = {site.id: i for i, site in enumerate(request.sites)}
@@ -86,7 +88,12 @@ def convert_request_to_vrp_data(request: OptimizeRequest):
         )
         vehicles.append(domain_veh)
     
-    # Shipments
+    # Matrices (needed for Time Paradox safety check)
+    travel_time = request.durations
+    travel_dist = [[d // 1000 for d in row] for row in request.distances]  # m -> km
+    setup_time = [[0] * len(locations) for _ in range(len(locations))]
+    
+    # Shipments (with Time Paradox safety logic)
     shipments = []
     for i, ship in enumerate(request.shipments):
         pickup_idx = site_id_to_idx.get(ship.pickup_site_id)
@@ -95,8 +102,20 @@ def convert_request_to_vrp_data(request: OptimizeRequest):
         if pickup_idx is None or delivery_idx is None:
             raise HTTPException(status_code=400, detail=f"Invalid site reference in shipment {ship.id}")
         
-        # Import domain TimeWindow
-        from vrp_solver.domain.shipment import TimeWindow as DomainTimeWindow
+        # Get time windows
+        p_start = ship.pickup_window.start
+        p_end = ship.pickup_window.end
+        d_start = ship.delivery_window.start
+        d_end = ship.delivery_window.end
+        
+        # [Safety Logic] Fix Time Paradox
+        min_travel = travel_time[pickup_idx][delivery_idx] if travel_time else 20
+        service_time = locations[pickup_idx].service_duration
+        min_delivery_start = p_start + service_time + min_travel
+        
+        if d_end < min_delivery_start:
+            d_start = max(d_start, min_delivery_start)
+            d_end = d_start + 100
         
         domain_ship = DomainShipment(
             id=i,
@@ -107,25 +126,67 @@ def convert_request_to_vrp_data(request: OptimizeRequest):
                 weight=ship.cargo.weight,
                 volume=ship.cargo.volume
             ),
-            # Use shipment-specific time windows
-            pickup_window=DomainTimeWindow(
-                start=ship.pickup_window.start,
-                end=ship.pickup_window.end
-            ),
-            delivery_window=DomainTimeWindow(
-                start=ship.delivery_window.start,
-                end=ship.delivery_window.end
-            ),
+            pickup_window=DomainTimeWindow(start=p_start, end=p_end),
+            delivery_window=DomainTimeWindow(start=d_start, end=d_end),
             required_tags=ship.required_tags,
             priority=ship.priority,
             unserved_penalty=request.penalties.unserved
         )
         shipments.append(domain_ship)
     
-    # Matrices
-    travel_time = request.durations
-    travel_dist = [[d // 1000 for d in row] for row in request.distances]  # m -> km
-    setup_time = [[0] * len(locations) for _ in range(len(locations))]
+    # Build Stops (Stop-based architecture)
+    stops = []
+    stop_id = 0
+    
+    # Start depots (one per vehicle)
+    for v_idx, veh in enumerate(vehicles):
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.DEPOT_START,
+            location_idx=veh.start_loc,
+            vehicle_idx=v_idx,
+            shipment_idx=-1,
+            weight_delta=0,
+            volume_delta=0
+        ))
+        stop_id += 1
+    
+    # Shipment stops (pickup + delivery)
+    for s_idx, ship in enumerate(shipments):
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.PICKUP,
+            location_idx=ship.pickup_id,
+            shipment_idx=s_idx,
+            vehicle_idx=-1,
+            weight_delta=+ship.cargo.weight,
+            volume_delta=+ship.cargo.volume
+        ))
+        stop_id += 1
+        
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.DELIVERY,
+            location_idx=ship.delivery_id,
+            shipment_idx=s_idx,
+            vehicle_idx=-1,
+            weight_delta=-ship.cargo.weight,
+            volume_delta=-ship.cargo.volume
+        ))
+        stop_id += 1
+    
+    # End depots (one per vehicle)
+    for v_idx, veh in enumerate(vehicles):
+        stops.append(Stop(
+            id=stop_id,
+            stop_type=StopType.DEPOT_END,
+            location_idx=veh.end_loc,
+            vehicle_idx=v_idx,
+            shipment_idx=-1,
+            weight_delta=0,
+            volume_delta=0
+        ))
+        stop_id += 1
     
     penalties = DomainPenaltyConfig(
         unserved=request.penalties.unserved,
@@ -139,6 +200,7 @@ def convert_request_to_vrp_data(request: OptimizeRequest):
         locations=locations,
         vehicles=vehicles,
         shipments=shipments,
+        stops=stops,
         travel_time_matrix=travel_time,
         travel_dist_matrix=travel_dist,
         setup_time_matrix=setup_time,
@@ -165,8 +227,36 @@ async def optimize(request: OptimizeRequest):
     idx_to_site_id = {v: k for k, v in site_id_map.items()}
     
     # Config
-    config = VRPConfig()
-    config.max_solver_time = request.max_solver_time
+    # Config
+    if request.config:
+        # Use provided config
+        config = VRPConfig()
+        config.capacity_scale_factor = request.config.capacity_scale_factor
+        
+        config.standard_work_time = request.config.standard_work_time
+        config.max_work_time = request.config.max_work_time
+        config.overtime_multiplier = request.config.overtime_multiplier
+        config.break_interval = request.config.break_interval
+        config.break_duration = request.config.break_duration
+        
+        config.depot_min_service_time = request.config.depot_min_service_time
+        config.min_intra_transit = request.config.min_intra_transit
+        
+        config.cost_per_kg_km = request.config.cost_per_kg_km
+        config.cost_per_wait_min = request.config.cost_per_wait_min
+        
+        config.unserved_penalty = request.config.unserved_penalty
+        config.late_penalty = request.config.late_penalty
+        config.zone_penalty = request.config.zone_penalty
+        
+        config.max_solver_time = request.config.max_solver_time
+        config.num_solver_workers = request.config.num_solver_workers
+    else:
+        # Fallback to defaults + top-level legacy overrides
+        config = VRPConfig()
+        config.max_solver_time = request.max_solver_time
+        # Legacy penalties override if needed, but we'll assume new frontend uses config
+
     
     # Create solver
     solver = VRPSolver(vrp_data, config)
@@ -194,7 +284,7 @@ async def optimize(request: OptimizeRequest):
             unserved_shipments=[s.id for s in request.shipments]
         )
     
-    # Extract results
+    # Extract results (Stop-based)
     cars = solver.variables
     routes = []
     
@@ -203,29 +293,32 @@ async def optimize(request: OptimizeRequest):
             continue
         
         stops = []
-        total_dist = 0
         
         for s in range(solver.max_steps):
             is_d = cp_solver.Value(cars['is_done'][v, s])
             prev_d = cp_solver.Value(cars['is_done'][v, s-1]) if s > 0 else False
             
             if not is_d or (is_d and not prev_d):
-                loc_idx = cp_solver.Value(cars['route'][v, s])
+                stop_idx = cp_solver.Value(cars['route'][v, s])
+                stop = vrp_data.stops[stop_idx]
+                loc_idx = stop.location_idx
                 site_id = idx_to_site_id.get(loc_idx, f"site_{loc_idx}")
                 
-                stop = RouteStop(
+                route_stop = RouteStop(
                     site_id=site_id,
                     arrival_time=cp_solver.Value(cars['arrival_time'][v, s]),
-                    load_weight=cp_solver.Value(cars['load_w'][v, s]),
-                    load_volume=cp_solver.Value(cars['load_v'][v, s]),
-                    is_late=bool(cp_solver.Value(cars['debug_is_late'].get((v, s), 0)))
+                    load_weight=cp_solver.Value(cars['load_w'][v, s]) / config.capacity_scale_factor,
+                    load_volume=cp_solver.Value(cars['load_v'][v, s]) / config.capacity_scale_factor,
+                    is_late=bool(cp_solver.Value(cars['debug_is_late'].get((v, s), 0))),
+                    stop_type=stop.stop_type.value,
+                    shipment_id=request.shipments[stop.shipment_idx].id if stop.shipment_idx >= 0 else None
                 )
-                stops.append(stop)
+                stops.append(route_stop)
         
         veh_route = VehicleRoute(
             vehicle_id=request.vehicles[v].id,
             stops=stops,
-            total_distance=0,  # Would need edge tracking
+            total_distance=0,
             total_time=stops[-1].arrival_time if stops else 0
         )
         routes.append(veh_route)
@@ -243,11 +336,10 @@ async def optimize(request: OptimizeRequest):
         total=cp_solver.Value(cars['total_cost'])
     )
     
-    # Unserved
+    # Unserved (now uses shipment index, not location index!)
     unserved = []
     for i, ship in enumerate(request.shipments):
-        pickup_idx = site_id_map[ship.pickup_site_id]
-        if not cp_solver.Value(cars['is_served'][pickup_idx]):
+        if not cp_solver.Value(cars['is_served'][i]):
             unserved.append(ship.id)
     
     return OptimizeResponse(

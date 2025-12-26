@@ -6,9 +6,10 @@
 import { useState } from 'react';
 import { useVRPStore } from '@/lib/store/vrp-store';
 import { generateMatrix, optimize } from '@/lib/api/vrp-api';
-import { exampleSites, exampleVehicles, exampleShipments } from '@/lib/data/example-data';
+import { exampleSites, exampleVehicles, exampleShipments, exampleHubSpokeSites, exampleHubSpokeVehicles, exampleHubSpokeShipments, exampleHubSpokeMatrix } from '@/lib/data/example-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { ConfigPanel } from './ConfigPanel';
 
 export function ControlBar() {
     const {
@@ -28,6 +29,15 @@ export function ControlBar() {
         exampleVehicles.forEach(veh => addVehicle(veh));
         exampleShipments.forEach(ship => addShipment(ship));
 
+        setError(null);
+    };
+
+    const handleLoadHubSpoke = () => {
+        reset();
+        exampleHubSpokeSites.forEach(site => addSite(site));
+        exampleHubSpokeVehicles.forEach(veh => addVehicle(veh));
+        exampleHubSpokeShipments.forEach(ship => addShipment(ship));
+        setMatrix(exampleHubSpokeMatrix);
         setError(null);
     };
 
@@ -93,6 +103,14 @@ export function ControlBar() {
                     📥 Load Example
                 </Button>
 
+                <Button
+                    onClick={handleLoadHubSpoke}
+                    variant="secondary"
+                    size="sm"
+                >
+                    📦 Load Hub & Spoke (CJ)
+                </Button>
+
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <span>📍 {sites.length} Sites</span>
                     <span>🚛 {vehicles.length} Vehicles</span>
@@ -100,6 +118,8 @@ export function ControlBar() {
                 </div>
 
                 <div className="flex-1" />
+
+                <ConfigPanel />
 
                 <Button
                     onClick={handleGenerateMatrix}

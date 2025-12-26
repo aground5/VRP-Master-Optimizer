@@ -9,8 +9,8 @@ from typing import List, Optional
 @dataclass
 class Cargo:
     """Physical properties of the cargo."""
-    weight: int = 0              # Weight in kg
-    volume: int = 0              # Volume in m³ or units
+    weight: float = 0.0              # Weight in kg
+    volume: float = 0.0              # Volume in m³ or units
     pallets: int = 0             # Optional pallet count
     temp_class: Optional[str] = None  # e.g., "frozen", "chilled", "ambient"
     
@@ -32,6 +32,9 @@ class Shipment:
     
     # Cargo
     cargo: Cargo = field(default_factory=Cargo)
+    
+    # Service Duration Override
+    service_duration_override: Optional[int] = None
     
     # Time Windows (optional, can override location windows)
     pickup_window: Optional[TimeWindow] = None

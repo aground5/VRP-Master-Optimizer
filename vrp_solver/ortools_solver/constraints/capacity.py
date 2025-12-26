@@ -1,4 +1,12 @@
+"""
+Capacity Constraints for Stop-based VRP.
+
+Handles:
+- Load tracking (weight/volume) using pre-computed stop deltas
+- Capacity limits per vehicle
+"""
 from vrp_solver.ortools_solver.wrapper import VRPSolver
+
 
 class CapacityConstraints:
     @staticmethod
@@ -10,46 +18,54 @@ class CapacityConstraints:
         num_v = solver.num_vehicles
         max_s = solver.max_steps
         
-        route = cars['route']
+        route = cars['route']  # Stop index
         load_w = cars['load_w']
         load_v = cars['load_v']
+        is_done = cars['is_done']
         
-        # Build demand maps from Shipments
-        demand_weight = [0] * solver.num_locations
-        demand_volume = [0] * solver.num_locations
+        # Pre-computed deltas from wrapper
+        stop_weight_delta = solver.stop_weight_delta
+        stop_volume_delta = solver.stop_volume_delta
         
-        for ship in data.shipments:
-            demand_weight[ship.pickup_id] = ship.cargo.weight
-            demand_volume[ship.pickup_id] = ship.cargo.volume
-            demand_weight[ship.delivery_id] = -ship.cargo.weight
-            demand_volume[ship.delivery_id] = -ship.cargo.volume
-            
         for v in range(num_v):
             veh = data.vehicles[v]
+            end_depot_stop = solver.vehicle_end_stop[v]
             
-            # Init
+            # Initial load = 0
             m.Add(load_w[v, 0] == 0)
             m.Add(load_v[v, 0] == 0)
             
             for s in range(max_s - 1):
-                next_n = route[v, s+1]
+                curr_stop = route[v, s]
                 
-                next_is_depot = m.NewBoolVar(f'nid_{v}_{s}')
-                m.Add(next_n == veh.end_loc).OnlyEnforceIf(next_is_depot)
-                m.Add(next_n != veh.end_loc).OnlyEnforceIf(next_is_depot.Not())
+                # Get delta from current stop
+                delta_w = m.NewIntVar(-500, 500, f'dw_{v}_{s}')
+                m.AddElement(curr_stop, stop_weight_delta, delta_w)
+                delta_vol = m.NewIntVar(-500, 500, f'dv_{v}_{s}')
+                m.AddElement(curr_stop, stop_volume_delta, delta_vol)
                 
-                dem_w = m.NewIntVar(-100, 100, f'dw_{v}_{s}')
-                m.AddElement(next_n, demand_weight, dem_w)
-                dem_v = m.NewIntVar(-100, 100, f'dv_{v}_{s}')
-                m.AddElement(next_n, demand_volume, dem_v)
+                # Check if at end depot
+                at_end_depot = m.NewBoolVar(f'aed_{v}_{s}')
+                m.Add(curr_stop == end_depot_stop).OnlyEnforceIf(at_end_depot)
+                m.Add(curr_stop != end_depot_stop).OnlyEnforceIf(at_end_depot.Not())
                 
-                m.Add(load_w[v, s+1] == 0).OnlyEnforceIf(next_is_depot)
-                m.Add(load_v[v, s+1] == 0).OnlyEnforceIf(next_is_depot)
+                # If at end depot or done, reset to 0
+                # Otherwise, apply delta
+                reset_cond = m.NewBoolVar(f'reset_{v}_{s}')
+                m.AddBoolOr([at_end_depot, is_done[v, s]]).OnlyEnforceIf(reset_cond)
+                m.AddBoolAnd([at_end_depot.Not(), is_done[v, s].Not()]).OnlyEnforceIf(reset_cond.Not())
                 
-                m.Add(load_w[v, s+1] == load_w[v, s] + dem_w).OnlyEnforceIf(next_is_depot.Not())
-                m.Add(load_v[v, s+1] == load_v[v, s] + dem_v).OnlyEnforceIf(next_is_depot.Not())
+                m.Add(load_w[v, s+1] == 0).OnlyEnforceIf(reset_cond)
+                m.Add(load_v[v, s+1] == 0).OnlyEnforceIf(reset_cond)
                 
-            # Max Capacity Check - Using new ontology
+                m.Add(load_w[v, s+1] == load_w[v, s] + delta_w).OnlyEnforceIf(reset_cond.Not())
+                m.Add(load_v[v, s+1] == load_v[v, s] + delta_vol).OnlyEnforceIf(reset_cond.Not())
+            
+            # Capacity limits
+            scale = solver.config.capacity_scale_factor
             for s in range(max_s):
-                m.Add(load_w[v, s] <= veh.profile.capacity.weight)
-                m.Add(load_v[v, s] <= veh.profile.capacity.volume)
+                m.Add(load_w[v, s] <= int(veh.profile.capacity.weight * scale))
+                m.Add(load_v[v, s] <= int(veh.profile.capacity.volume * scale))
+                # Non-negative load
+                m.Add(load_w[v, s] >= 0)
+                m.Add(load_v[v, s] >= 0)

@@ -1,7 +1,7 @@
 /**
  * API Client for VRP Backend
  */
-import type { Site, MatrixData, Vehicle, Shipment, OptimizeResult } from '@/types/vrp';
+import type { Site, MatrixData, Vehicle, Shipment, OptimizeResult, SolverConfig } from '@/types/vrp';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -32,6 +32,7 @@ interface OptimizeParams {
         zone_crossing: number;
     };
     max_solver_time?: number;
+    config?: SolverConfig;
 }
 
 export async function optimize(params: OptimizeParams): Promise<OptimizeResult> {
@@ -40,6 +41,7 @@ export async function optimize(params: OptimizeParams): Promise<OptimizeResult> 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             ...params,
+            config: params.config,
             penalties: params.penalties || {
                 unserved: 500000,
                 late_delivery: 50000,
@@ -48,6 +50,7 @@ export async function optimize(params: OptimizeParams): Promise<OptimizeResult> 
             max_solver_time: params.max_solver_time || 30.0,
         }),
     });
+
 
     if (!response.ok) {
         const error = await response.json();

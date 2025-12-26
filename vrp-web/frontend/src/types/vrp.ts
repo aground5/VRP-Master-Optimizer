@@ -80,6 +80,8 @@ export interface RouteStop {
     load_weight: number;
     load_volume: number;
     is_late: boolean;
+    stop_type: string;        // 'depot_start', 'pickup', 'delivery', 'depot_end'
+    shipment_id?: string;     // Null for depots
 }
 
 export interface VehicleRoute {
@@ -106,6 +108,35 @@ export interface OptimizeResult {
     routes: VehicleRoute[];
     costs: CostBreakdown;
     unserved_shipments: string[];
+}
+
+export interface SolverConfig {
+    // Scale
+    capacity_scale_factor: number;
+
+    // Labor
+    standard_work_time: number;
+    max_work_time: number;
+    overtime_multiplier: number;
+    break_interval: number;
+    break_duration: number;
+
+    // Operations
+    depot_min_service_time: number;
+    min_intra_transit: number;
+
+    // Costs
+    cost_per_kg_km: number;
+    cost_per_wait_min: number;
+
+    // Penalties
+    unserved_penalty: number;
+    late_penalty: number;
+    zone_penalty: number;
+
+    // Solver
+    max_solver_time: number;
+    num_solver_workers: number;
 }
 
 export interface MatrixData {

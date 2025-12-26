@@ -18,14 +18,20 @@ class Location:
     id: int
     name: str = ""
     
+    is_depot: bool = False
+
     # Service
     service_duration: int = 0    # Default service time at this location
     
     # Zone/Region
     zone_id: int = 0             # Zone identifier for clustering penalties
     
+    # Time Constraints
+    open_time: int = 0           # Opening time (minutes from midnight)
+    close_time: int = 1440       # Closing time (minutes from midnight, default 24h)
+    
     # Site Constraints
-    profile: SiteProfile = field(default_factory=SiteProfile)
+    profile: 'SiteProfile' = field(default_factory=lambda: SiteProfile())
     
     # Optional Coordinates (for visualization/distance calc if not matrix-based)
     x: float = 0.0

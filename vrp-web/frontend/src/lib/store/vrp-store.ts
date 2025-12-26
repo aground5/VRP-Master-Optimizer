@@ -2,7 +2,7 @@
  * Zustand Store for VRP State
  */
 import { create } from 'zustand';
-import type { Site, Vehicle, Shipment, MatrixData, OptimizeResult } from '@/types/vrp';
+import type { Site, Vehicle, Shipment, MatrixData, OptimizeResult, SolverConfig } from '@/types/vrp';
 
 interface VRPState {
     // Data
@@ -17,6 +17,12 @@ interface VRPState {
     selectedVehicleId: string | null;
     selectedShipmentId: string | null;
     isOptimizing: boolean;
+
+
+    // Config
+    config: SolverConfig;
+    setConfig: (config: SolverConfig) => void;
+    updateConfig: (updates: Partial<SolverConfig>) => void;
 
     // Actions
     addSite: (site: Site) => void;
@@ -42,6 +48,24 @@ interface VRPState {
     reset: () => void;
 }
 
+const defaultConfig: SolverConfig = {
+    capacity_scale_factor: 100,
+    standard_work_time: 480,
+    max_work_time: 720,
+    overtime_multiplier: 1.5,
+    break_interval: 240,
+    break_duration: 30,
+    depot_min_service_time: 30,
+    min_intra_transit: 5,
+    cost_per_kg_km: 1,
+    cost_per_wait_min: 5,
+    unserved_penalty: 500000,
+    late_penalty: 50000,
+    zone_penalty: 2000,
+    max_solver_time: 30.0,
+    num_solver_workers: 8,
+};
+
 const initialState = {
     sites: [],
     vehicles: [],
@@ -52,10 +76,14 @@ const initialState = {
     selectedVehicleId: null,
     selectedShipmentId: null,
     isOptimizing: false,
+    config: defaultConfig,
 };
 
 export const useVRPStore = create<VRPState>((set) => ({
     ...initialState,
+
+    setConfig: (config) => set({ config }),
+    updateConfig: (updates) => set((state) => ({ config: { ...state.config, ...updates } })),
 
     addSite: (site) => set((state) => ({ sites: [...state.sites, site] })),
     updateSite: (id, updates) => set((state) => ({
@@ -94,3 +122,4 @@ export const useVRPStore = create<VRPState>((set) => ({
 
     reset: () => set(initialState),
 }));
+

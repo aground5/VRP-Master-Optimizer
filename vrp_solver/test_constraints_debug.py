@@ -9,7 +9,7 @@ from vrp_solver.config import VRPConfig
 from vrp_solver.domain import (
     VRPData, Location, SiteProfile,
     Vehicle as DomainVehicle, VehicleProfile, VehicleCapacity, VehicleCostProfile,
-    Shipment as DomainShipment, Cargo as DomainCargo,
+    Shipment as DomainShipment, Cargo as DomainCargo, TimeWindow,
     LaborPolicy, WorkShift, BreakRule, LaborCost,
     PenaltyConfig as DomainPenaltyConfig, OperationalCost
 )
@@ -112,8 +112,6 @@ def convert_to_vrp_data(data: dict) -> VRPData:
         loc = Location(
             id=i,
             name=site["name"],
-            start_window=site["time_window"]["start"],
-            end_window=site["time_window"]["end"],
             service_duration=site["service_duration"],
             zone_id=site["zone_id"],
             profile=SiteProfile(),
@@ -167,6 +165,9 @@ def convert_to_vrp_data(data: dict) -> VRPData:
         pickup_idx = site_id_to_idx.get(ship["pickup_site_id"])
         delivery_idx = site_id_to_idx.get(ship["delivery_site_id"])
         
+        pickup_site = sites[pickup_idx]
+        delivery_site = sites[delivery_idx]
+        
         domain_ship = DomainShipment(
             id=i,
             name=ship["name"],
@@ -175,6 +176,14 @@ def convert_to_vrp_data(data: dict) -> VRPData:
             cargo=DomainCargo(
                 weight=ship["cargo"]["weight"],
                 volume=ship["cargo"]["volume"]
+            ),
+            pickup_window=TimeWindow(
+                start=0,
+                end=24*60
+            ),
+            delivery_window=TimeWindow(
+                start=0,
+                end=24*60
             ),
             required_tags=ship.get("required_tags", []),
             priority=ship["priority"],
@@ -193,11 +202,16 @@ def convert_to_vrp_data(data: dict) -> VRPData:
     )
     
     operations = OperationalCost(depot_service_time=30, min_intra_transit=5)
+
+    # NEW: Build stops
+    from vrp_solver.logic.data_loader import build_stops
+    stops = build_stops(domain_vehicles, domain_shipments)
     
     return VRPData(
         locations=locations,
         vehicles=domain_vehicles,
         shipments=domain_shipments,
+        stops=stops,
         travel_time_matrix=travel_time,
         travel_dist_matrix=travel_dist,
         setup_time_matrix=setup_time,
